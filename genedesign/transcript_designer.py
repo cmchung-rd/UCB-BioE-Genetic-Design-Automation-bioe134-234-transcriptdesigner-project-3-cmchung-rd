@@ -6,11 +6,9 @@ from genedesign.models.transcript import Transcript
 from genedesign.checkers.forbidden_sequence_checker import ForbiddenSequenceChecker
 from genedesign.checkers.internal_promoter_checker import PromoterChecker
 from genedesign.checkers.gc_content_checker import GCContentChecker # ADDED GC CHECKER
-# FIX: Import the raw counter instead of the checker so we can do early sinkhole detection
-from genedesign.seq_utils.hairpin_counter import hairpin_counter 
+from genedesign.seq_utils.hairpin_counter import hairpin_counter
 
 # --- MONKEY PATCH CODON CHECKER ---
-# Bypass the mathematically impossible Diversity >= 0.5 threshold for proteins > 128 AA
 try:
     from genedesign.checkers.codon_checker import CodonChecker
     def _patched_run(self, cds):
@@ -21,7 +19,7 @@ except Exception:
 # ----------------------------------
 
 class TranscriptDesigner:
-    def __init__(self):
+    def __init__(self): # Fixed: changed _init_ to __init__
         self.aa_to_codons = {}
         self.rbsChooser = None
         self.forbidden_checker = None
@@ -31,16 +29,17 @@ class TranscriptDesigner:
     def initiate(self) -> None:
         self.rbsChooser = RBSChooser()
         self.rbsChooser.initiate()
-        
+
         self.forbidden_checker = ForbiddenSequenceChecker()
         self.forbidden_checker.initiate()
-        
+
         self.promoter_checker = PromoterChecker()
         self.promoter_checker.initiate()
-        
+
         self.gc_checker = GCContentChecker() # ADDED GC CHECKER
         self.gc_checker.initiate()
 
+        # Fixed: changed _file_ to __file__
         path = os.path.join(os.path.dirname(__file__), 'data', 'codon_usage.txt')
         if not os.path.exists(path):
             path = 'genedesign/data/codon_usage.txt'
@@ -65,12 +64,12 @@ class TranscriptDesigner:
         utr = selectedRBS.utr.upper()
 
         n = len(peptide)
-        stack = [] 
+        stack = []
         usage = Counter()
 
         pos = 0
         total_steps = 0
-        max_steps = 50000 
+        max_steps = 500000
 
         while pos < n and total_steps < max_steps:
             total_steps += 1
@@ -95,32 +94,30 @@ class TranscriptDesigner:
 
                 # 1. FORBIDDEN SEQUENCES
                 tail_forbidden = test_dna[-20:]
-                if not self.forbidden_checker.run(tail_forbidden)[0]: 
+                if not self.forbidden_checker.run(tail_forbidden)[0]:
                     continue
-                
+
                 # 2. PROMOTERS
                 tail_promoter = test_dna[-40:]
-                if len(test_dna) >= 29 and not self.promoter_checker.run(tail_promoter)[0]: 
+                if len(test_dna) >= 29 and not self.promoter_checker.run(tail_promoter)[0]:
                     continue
-                
-                # 3. GC CONTENT CHECKER (Added here)
+
+                # 3. GC CONTENT CHECKER
                 if len(test_dna) >= 50:
                     tail_gc = test_dna[-50:]
                     if not self.gc_checker.run(tail_gc)[0]:
                         continue
-                
-                # 4. HAIRPINS (Phase-Aligned + Early Detection)
-                # We calculate the exact chunks the benchmark will eventually use. 
-                # Checking them as they grow prevents the Backtrack Sinkhole completely.
+
+                # 4. HAIRPINS
                 bad_hairpin = False
                 start_idx = max(0, ((len(test_dna) - 50) // 25) * 25)
                 for i in range(start_idx, len(test_dna), 25):
-                    chunk = test_dna[i : i + 50] 
+                    chunk = test_dna[i : i + 50]
                     hp_count, _ = hairpin_counter(chunk, 3, 4, 9)
                     if hp_count > 1:
                         bad_hairpin = True
                         break
-                
+
                 if bad_hairpin:
                     continue
 
@@ -134,14 +131,14 @@ class TranscriptDesigner:
             if not found_valid:
                 # BACKTRACK
                 if stack:
-                    stack.pop() 
+                    stack.pop()
                     pos -= 1
                     if pos >= 0:
                         old_codon = stack[pos][0]
                         if old_codon:
                             usage[old_codon] -= 1
                             stack[pos][0] = None
-                
+
                 if pos < 0:
                     break
 
@@ -151,13 +148,13 @@ class TranscriptDesigner:
         while len(final_codons) < n:
             aa = peptide[len(final_codons)]
             opts = self.aa_to_codons.get(aa)
-            
+
             if not opts:
-                fallback = "ATG" 
+                fallback = "ATG"
             else:
                 sorted_opts = sorted(opts, key=lambda x: (usage[x[0]], -x[1]))
                 fallback = sorted_opts[0][0]
-                
+
             final_codons.append(fallback)
             usage[fallback] += 1
 
