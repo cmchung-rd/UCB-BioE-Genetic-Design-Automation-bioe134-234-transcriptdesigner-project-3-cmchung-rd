@@ -1,10 +1,10 @@
 class GCContentChecker:
     """
-    Checks the GC content of a given DNA sequence to ensure it falls 
+    Checks the GC content of a given DNA sequence to ensure it falls
     within acceptable synthesis thresholds (both globally and locally).
     """
 
-    def __init__(self):
+    def _init_(self):
         self.min_gc = 0.0
         self.max_gc = 0.0
         self.window_size = 0
@@ -18,10 +18,10 @@ class GCContentChecker:
     def run(self, dna: str) -> tuple[bool, str]:
         """
         Checks if the DNA sequence meets GC content requirements.
-        
+
         Parameters:
             dna (str): The DNA sequence to analyze.
-            
+
         Returns:
             tuple: (True, None) if the sequence passes.
                    (False, problematic_string) if it fails.
@@ -30,7 +30,7 @@ class GCContentChecker:
             return False, "Empty sequence"
 
         dna = dna.upper()
-        
+
         # 1. Check global GC content
         gc_count = dna.count('G') + dna.count('C')
         global_gc = gc_count / len(dna)
@@ -42,18 +42,18 @@ class GCContentChecker:
             for i in range(len(dna) - self.window_size + 1):
                 window = dna[i:i + self.window_size]
                 window_gc = (window.count('G') + window.count('C')) / self.window_size
-                
+
                 if window_gc < self.min_gc or window_gc > self.max_gc:
                     return False, f"Local GC out of bounds in window: {window}"
-                
+
         return True, None
 
 if __name__ == "__main__":
     checker = GCContentChecker()
     checker.initiate()
-    
+
     good_seq = "ATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCAT"
     bad_seq =  "GCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGC"
-    
+
     print(f"Good Seq Result: {checker.run(good_seq)}")
     print(f"Bad Seq Result: {checker.run(bad_seq)}")
